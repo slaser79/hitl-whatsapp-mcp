@@ -1,0 +1,155 @@
+import requests
+
+import main
+import whatsapp
+
+
+class DummyResponse:
+    def __init__(self, status_code=200, payload=None, text="OK"):
+        self.status_code = status_code
+        self._payload = payload or {"success": True, "message": "sent", "path": "/tmp/media.jpg"}
+        self.text = text
+
+    def json(self):
+        return self._payload
+
+
+def test_bridge_unavailable(monkeypatch):
+    """If the bridge is unreachable, tools return bridge_unavailable error."""
+    def fake_get_fail(url, headers=None, timeout=None):
+        raise requests.ConnectionError("Connection refused")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_fail)
+
+    # 1) send_message
+    res = main.send_message(recipient="12025551234", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unavailable"
+    assert "bridge_unavailable" in res["message"]
+
+    # 2) send_file
+    # Create a dummy file to pass validation
+    dummy_file = "dummy_file.ogg"
+    with open(dummy_file, "w") as f:
+        f.write("dummy content")
+
+    try:
+        res = main.send_file(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "bridge_unavailable"
+        assert "bridge_unavailable" in res["message"]
+
+        # 3) send_audio_message
+        res = main.send_audio_message(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "bridge_unavailable"
+        assert "bridge_unavailable" in res["message"]
+    finally:
+        import os
+        if os.path.exists(dummy_file):
+            os.remove(dummy_file)
+
+    # 4) download_media
+    res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unavailable"
+    assert "bridge_unavailable" in res["message"]
+
+
+def test_whatsapp_session_expired(monkeypatch):
+    """If the session is expired, tools return whatsapp_session_expired error."""
+    # Mock /api/health to return 503 Service Unavailable / disconnected
+    def fake_get_disconnected(url, headers=None, timeout=None):
+        return DummyResponse(status_code=503, payload={"status": "disconnected", "connected": False})
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_disconnected)
+
+    # 1) send_message
+    res = main.send_message(recipient="12025551234", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "whatsapp_session_expired"
+    assert "whatsapp_session_expired" in res["message"]
+
+    # 2) send_file
+    dummy_file = "dummy_file.ogg"
+    with open(dummy_file, "w") as f:
+        f.write("dummy content")
+
+    try:
+        res = main.send_file(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "whatsapp_session_expired"
+        assert "whatsapp_session_expired" in res["message"]
+
+        # 3) send_audio_message
+        res = main.send_audio_message(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "whatsapp_session_expired"
+        assert "whatsapp_session_expired" in res["message"]
+    finally:
+        import os
+        if os.path.exists(dummy_file):
+            os.remove(dummy_file)
+
+    # 4) download_media
+    res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "whatsapp_session_expired"
+    assert "whatsapp_session_expired" in res["message"]
+
+
+def test_chat_not_found_on_send(monkeypatch):
+    """If chat is invalid/unknown (400 Bad Request from bridge), send tools return chat_not_found."""
+    # Health check passes
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    # Send returns 400 Bad Request
+    def fake_post_bad_request(url, json, headers=None):
+        return DummyResponse(status_code=400, text="Error resolving recipient: JID format invalid")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_bad_request)
+
+    res = main.send_message(recipient="invalid-recipient", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "chat_not_found"
+    assert "chat_not_found" in res["message"]
+
+    dummy_file = "dummy_file.ogg"
+    with open(dummy_file, "w") as f:
+        f.write("dummy content")
+
+    try:
+        res = main.send_file(recipient="invalid-recipient", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "chat_not_found"
+        assert "chat_not_found" in res["message"]
+
+        res = main.send_audio_message(recipient="invalid-recipient", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "chat_not_found"
+        assert "chat_not_found" in res["message"]
+    finally:
+        import os
+        if os.path.exists(dummy_file):
+            os.remove(dummy_file)
+
+
+def test_chat_not_found_on_download(monkeypatch):
+    """If message/chat is invalid/unknown on download (400/500), download_media returns chat_not_found."""
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    def fake_post_download_fail(url, json, headers=None):
+        return DummyResponse(
+            status_code=500, payload={"success": False, "message": "Failed to download media: message not found"}
+        )
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_download_fail)
+
+    res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "chat_not_found"
+    assert "chat_not_found" in res["message"]

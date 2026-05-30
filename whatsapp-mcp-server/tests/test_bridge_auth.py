@@ -13,6 +13,15 @@ class DummyResponse:
         return self._payload
 
 
+@pytest.fixture(autouse=True)
+def mock_health_check(monkeypatch):
+    def fake_get(url, headers=None, timeout=None):
+        if "/health" in url:
+            return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+        return DummyResponse(status_code=404, text="Not Found")
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get)
+
+
 def test_bridge_headers_uses_env_token(monkeypatch):
     monkeypatch.setenv("WHATSAPP_BRIDGE_TOKEN", "env-token")
 

@@ -11,6 +11,11 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from whatsapp import (
+    BridgeUnavailableError,
+    ChatNotFoundError,
+    SessionExpiredError,
+)
+from whatsapp import (
     download_media as whatsapp_download_media,
 )
 from whatsapp import (
@@ -487,13 +492,20 @@ def send_message(
     """
     # Validate input
     if not recipient:
-        return {"success": False, "message": "Recipient must be provided"}
+        return {"success": False, "error_code": "chat_not_found", "message": "Recipient must be provided"}
 
-    # Call the whatsapp_send_message function with the unified recipient parameter
-    success, status_message = whatsapp_send_message(
-        recipient, message, quoted_message_id, quoted_sender_jid, quoted_content
-    )
-    return {"success": success, "message": status_message}
+    try:
+        # Call the whatsapp_send_message function with the unified recipient parameter
+        success, status_message = whatsapp_send_message(
+            recipient, message, quoted_message_id, quoted_sender_jid, quoted_content
+        )
+        return {"success": success, "message": status_message}
+    except BridgeUnavailableError as e:
+        return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except SessionExpiredError as e:
+        return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
+    except ChatNotFoundError as e:
+        return {"success": False, "error_code": "chat_not_found", "message": str(e)}
 
 
 @mcp.tool()
@@ -508,10 +520,16 @@ def send_file(recipient: str, media_path: str) -> dict[str, Any]:
     Returns:
         A dictionary containing success status and a status message
     """
-
-    # Call the whatsapp_send_file function
-    success, status_message = whatsapp_send_file(recipient, media_path)
-    return {"success": success, "message": status_message}
+    try:
+        # Call the whatsapp_send_file function
+        success, status_message = whatsapp_send_file(recipient, media_path)
+        return {"success": success, "message": status_message}
+    except BridgeUnavailableError as e:
+        return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except SessionExpiredError as e:
+        return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
+    except ChatNotFoundError as e:
+        return {"success": False, "error_code": "chat_not_found", "message": str(e)}
 
 
 @mcp.tool()
@@ -526,8 +544,15 @@ def send_audio_message(recipient: str, media_path: str) -> dict[str, Any]:
     Returns:
         A dictionary containing success status and a status message
     """
-    success, status_message = whatsapp_audio_voice_message(recipient, media_path)
-    return {"success": success, "message": status_message}
+    try:
+        success, status_message = whatsapp_audio_voice_message(recipient, media_path)
+        return {"success": success, "message": status_message}
+    except BridgeUnavailableError as e:
+        return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except SessionExpiredError as e:
+        return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
+    except ChatNotFoundError as e:
+        return {"success": False, "error_code": "chat_not_found", "message": str(e)}
 
 
 @mcp.tool()
@@ -541,12 +566,18 @@ def download_media(message_id: str, chat_jid: str) -> dict[str, Any]:
     Returns:
         A dictionary containing success status, a status message, and the file path if successful
     """
-    file_path = whatsapp_download_media(message_id, chat_jid)
-
-    if file_path:
-        return {"success": True, "message": "Media downloaded successfully", "file_path": file_path}
-    else:
-        return {"success": False, "message": "Failed to download media"}
+    try:
+        file_path = whatsapp_download_media(message_id, chat_jid)
+        if file_path:
+            return {"success": True, "message": "Media downloaded successfully", "file_path": file_path}
+        else:
+            return {"success": False, "message": "Failed to download media"}
+    except BridgeUnavailableError as e:
+        return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except SessionExpiredError as e:
+        return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
+    except ChatNotFoundError as e:
+        return {"success": False, "error_code": "chat_not_found", "message": str(e)}
 
 
 def shutdown_handler(signum, frame):

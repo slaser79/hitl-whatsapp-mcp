@@ -78,6 +78,23 @@ A Model Context Protocol (MCP) server for WhatsApp, enabling Claude to read and 
 
 5. **Restart Claude Desktop**
 
+### Installation via Nix (advanced)
+
+Most users should follow the Quick Start above. If you use [Nix](https://nixos.org)
+with flakes enabled, this repo ships a `flake.nix` that pins the whole toolchain
+(Go, Python, `uv`, FFmpeg, golangci-lint, OpenSSL, Tailscale, SQLite) and builds
+the Go bridge reproducibly — handy for maintainers and reproducible deployments:
+
+```bash
+nix develop                 # dev shell with every tool on PATH
+nix build .#whatsapp-bridge # -> result/bin/whatsapp-client
+nix run  .#whatsapp-bridge  # build and launch the bridge
+```
+
+The bridge binary is named `whatsapp-client` (the Go module name). This path is
+optional; the Quick Start's `go` + `uv` workflow is fully supported and is what
+the docs assume elsewhere.
+
 ### Updating
 
 Pull the latest changes, then refresh whichever components moved:
@@ -303,6 +320,7 @@ Copy `.env.example` to `.env` and configure as needed:
 | `WHATSAPP_MCP_PORT`    | `8089`                                   | Port for the `http`/`sse` transports |
 | `WHATSAPP_MCP_AUTH`    | `on`                                     | Require bearer/API-key auth for `http`/`sse`; `off` is only allowed on loopback |
 | `WHATSAPP_MCP_TOKEN`   | *(none)*                                 | Client-facing token for MCP `http`/`sse`; required when auth is on, minimum 32 chars |
+| `WHATSAPP_MCP_ALLOWED_HOSTS` | *(none)*                           | Comma-separated extra `Host` headers to trust for `http`/`sse` (loopback always allowed). Required behind a reverse proxy like Tailscale Serve; `host:*` matches any port |
 
 ### MCP transport (stdio vs http/sse)
 
@@ -330,6 +348,31 @@ The server refuses missing, shorter-than-32-char, or placeholder tokens.
 > server is reachable only from the local machine. `WHATSAPP_MCP_AUTH=off` is
 > permitted only for loopback binds; non-loopback hosts such as `0.0.0.0` fail
 > closed unless MCP auth is enabled with a strong token.
+
+### Remote access over Tailscale
+
+The recommended way to reach the server from another device (a phone, a second
+laptop, a mobile agent) is to keep it bound to loopback and expose it over your
+tailnet with [Tailscale Serve](https://tailscale.com/kb/1242/tailscale-serve) —
+private, TLS-terminated, and never on the public internet. The one-command flow
+lives in [`SETUP.md`](./SETUP.md) and `scripts/run-tailscale-serve.sh`.
+
+Because the server speaks the spec's streamable-HTTP transport, FastMCP enables
+DNS-rebinding protection and trusts only `localhost` `Host` headers when bound to
+loopback. A reverse proxy such as Tailscale Serve forwards the *original* tailnet
+`Host` header (e.g. `my-host.tailnet.ts.net`), which is otherwise rejected with
+**HTTP 421**. Set `WHATSAPP_MCP_ALLOWED_HOSTS` to that hostname (`host:*` allows
+any port) to trust it:
+
+```bash
+WHATSAPP_MCP_TRANSPORT=http \
+WHATSAPP_MCP_TOKEN="$(openssl rand -hex 24)" \
+WHATSAPP_MCP_ALLOWED_HOSTS="my-host.tailnet.ts.net:*" \
+uv run main.py
+```
+
+`scripts/run-tailscale-serve.sh` sets this automatically from your node's MagicDNS
+name, so you normally don't have to.
 
 ### Bridge authentication and media paths
 

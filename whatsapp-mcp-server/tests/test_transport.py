@@ -10,7 +10,13 @@ from starlette.responses import JSONResponse
 from starlette.testclient import TestClient
 
 import main
-from main import MCPAuthMiddleware, resolve_port, resolve_transport
+from main import (
+    DEFAULT_DNS_REBINDING_HOSTS,
+    MCPAuthMiddleware,
+    resolve_allowed_hosts,
+    resolve_port,
+    resolve_transport,
+)
 
 SERVER_DIR = Path(__file__).resolve().parents[1]
 VALID_TOKEN = "0123456789abcdef0123456789abcdef"
@@ -45,6 +51,7 @@ def reset_mcp_bind_settings(monkeypatch):
         "WHATSAPP_MCP_PORT",
         "WHATSAPP_MCP_AUTH",
         "WHATSAPP_MCP_TOKEN",
+        "WHATSAPP_MCP_ALLOWED_HOSTS",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -86,6 +93,51 @@ class TestResolvePort:
     def test_invalid_exits(self):
         with pytest.raises(SystemExit):
             resolve_port("not-a-number")
+
+
+class TestResolveAllowedHosts:
+    """Tests for resolve_allowed_hosts()."""
+
+    def test_unset_returns_none(self):
+        assert resolve_allowed_hosts(None) is None
+        assert resolve_allowed_hosts("") is None
+        assert resolve_allowed_hosts("  ,  ") is None
+
+    def test_single_host_prepends_loopback_defaults(self):
+        assert resolve_allowed_hosts("host.ts.net:*") == [
+            *DEFAULT_DNS_REBINDING_HOSTS,
+            "host.ts.net:*",
+        ]
+
+    def test_multiple_hosts_are_trimmed(self):
+        assert resolve_allowed_hosts(" a.ts.net:* , b.example:8443 ") == [
+            *DEFAULT_DNS_REBINDING_HOSTS,
+            "a.ts.net:*",
+            "b.example:8443",
+        ]
+
+
+def test_configure_remote_transport_keeps_default_security_when_unset(monkeypatch):
+    sentinel = object()
+    monkeypatch.setattr(main.mcp.settings, "transport_security", sentinel)
+    monkeypatch.delenv("WHATSAPP_MCP_ALLOWED_HOSTS", raising=False)
+
+    main.configure_remote_transport()
+
+    assert main.mcp.settings.transport_security is sentinel
+
+
+def test_configure_remote_transport_applies_allowed_hosts(monkeypatch):
+    monkeypatch.setattr(main.mcp.settings, "transport_security", None)
+    monkeypatch.setenv("WHATSAPP_MCP_ALLOWED_HOSTS", "host.ts.net:*")
+
+    main.configure_remote_transport()
+
+    security = main.mcp.settings.transport_security
+    assert security is not None
+    assert security.enable_dns_rebinding_protection is True
+    assert security.allowed_hosts == [*DEFAULT_DNS_REBINDING_HOSTS, "host.ts.net:*"]
+    assert security.allowed_origins == [*DEFAULT_DNS_REBINDING_HOSTS, "host.ts.net:*"]
 
 
 async def ok_app(scope, receive, send):

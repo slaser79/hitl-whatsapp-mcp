@@ -56,3 +56,7 @@ htmlcov/
 
 # Agent harness scratch dir (task runner artifacts)
 .agent_task/
+
+# Nix build artifacts
+result
+result-*

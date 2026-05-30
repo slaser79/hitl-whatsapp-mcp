@@ -13,6 +13,16 @@ class DummyResponse:
         return self._payload
 
 
+@pytest.fixture(autouse=True)
+def mock_health_check(monkeypatch):
+    def fake_get(url, headers=None, timeout=None):
+        if "/health" in url:
+            return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+        return DummyResponse(status_code=404, text="Not Found")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get)
+
+
 def test_bridge_headers_uses_env_token(monkeypatch):
     monkeypatch.setenv("WHATSAPP_BRIDGE_TOKEN", "env-token")
 
@@ -49,10 +59,10 @@ def test_send_message_without_token_surfaces_bridge_401(monkeypatch, tmp_path):
 
     monkeypatch.setattr(whatsapp.requests, "post", fake_post)
 
-    success, message = whatsapp.send_message("12025551234", "hello")
+    with pytest.raises(whatsapp.BridgeUnauthorizedError) as exc_info:
+        whatsapp.send_message("12025551234", "hello")
 
-    assert success is False
-    assert "HTTP 401" in message
+    assert "HTTP 401" in str(exc_info.value)
     assert calls[0]["headers"] == {}
 
 

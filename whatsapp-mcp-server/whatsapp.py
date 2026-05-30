@@ -1,7 +1,9 @@
 import json
+import logging
 import os
 import os.path
 import sqlite3
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -9,6 +11,57 @@ from typing import Any
 import requests
 
 import audio
+
+logger = logging.getLogger("whatsapp-mcp-server")
+
+
+class WhatsAppError(Exception):
+    """Base class for all WhatsApp/Bridge errors."""
+
+    pass
+
+
+class BridgeUnavailableError(WhatsAppError):
+    """Raised when the Go whatsmeow bridge is down/crashed/unreachable."""
+
+    pass
+
+
+class BridgeUnauthorizedError(WhatsAppError):
+    """Raised when the Go whatsmeow bridge returns HTTP 401 (Unauthorized)."""
+
+    pass
+
+
+class SessionExpiredError(WhatsAppError):
+    """Raised when the WhatsApp session is expired or disconnected."""
+
+    pass
+
+
+class ChatNotFoundError(WhatsAppError):
+    """Raised when a recipient chat/JID is not found or is invalid."""
+
+    pass
+
+
+class LocalFileNotFoundError(WhatsAppError):
+    """Raised when a local file to be sent is not found on the filesystem."""
+
+    pass
+
+
+class SystemDependencyError(WhatsAppError):
+    """Raised when a system dependency (like ffmpeg) is missing or fails."""
+
+    pass
+
+
+class InvalidParameterError(WhatsAppError):
+    """Raised when a parameter provided to a tool/function is missing or invalid."""
+
+    pass
+
 
 # Configuration via environment variables with sensible defaults
 MESSAGES_DB_PATH = os.getenv(
@@ -45,6 +98,64 @@ def _bridge_headers() -> dict[str, str]:
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}"}
+
+
+_last_health_check_time = 0.0
+_last_health_check_error = None
+
+
+def check_bridge_health() -> None:
+    """Probe the bridge health check endpoint (cached for 5 seconds outside tests).
+
+    Raises:
+        BridgeUnavailableError: If the bridge is unreachable.
+        SessionExpiredError: If the WhatsApp session is expired/disconnected.
+    """
+    global _last_health_check_time, _last_health_check_error
+    now = time.time()
+    if "PYTEST_CURRENT_TEST" not in os.environ:
+        if now - _last_health_check_time < 5.0:
+            if _last_health_check_error:
+                raise _last_health_check_error
+            return
+
+    url = f"{WHATSAPP_API_BASE_URL}/health"
+    try:
+        response = requests.get(url, headers=_bridge_headers(), timeout=5.0)
+    except requests.RequestException as e:
+        _last_health_check_error = BridgeUnavailableError(
+            f"bridge_unavailable: The WhatsApp bridge is unreachable. {e}"
+        )
+        _last_health_check_time = now
+        raise _last_health_check_error
+
+    if response.status_code == 503:
+        _last_health_check_error = SessionExpiredError(
+            "whatsapp_session_expired: The WhatsApp session has expired or is disconnected. "
+            "Please re-run QR login on the host."
+        )
+        _last_health_check_time = now
+        raise _last_health_check_error
+
+    try:
+        data = response.json()
+    except Exception:
+        _last_health_check_error = BridgeUnavailableError(
+            f"bridge_unavailable: Invalid health response from bridge (HTTP {response.status_code})"
+        )
+        _last_health_check_time = now
+        raise _last_health_check_error
+
+    if not data.get("connected", False) or data.get("status") == "disconnected":
+        _last_health_check_error = SessionExpiredError(
+            "whatsapp_session_expired: The WhatsApp session has expired or is disconnected. "
+            "Please re-run QR login on the host."
+        )
+        _last_health_check_time = now
+        raise _last_health_check_error
+
+    _last_health_check_error = None
+    _last_health_check_time = now
 
 
 @dataclass
@@ -984,11 +1095,12 @@ def send_message(
     quoted_sender_jid: str = "",
     quoted_content: str = "",
 ) -> tuple[bool, str]:
-    try:
-        # Validate input
-        if not recipient:
-            return False, "Recipient must be provided"
+    if not recipient:
+        raise InvalidParameterError("invalid_parameters: Recipient must be provided")
 
+    check_bridge_health()
+
+    try:
         url = f"{WHATSAPP_API_BASE_URL}/send"
         payload: dict[str, Any] = {
             "recipient": recipient,
@@ -1005,29 +1117,45 @@ def send_message(
         if response.status_code == 200:
             result = response.json()
             return result.get("success", False), result.get("message", "Unknown response")
+        elif response.status_code == 401:
+            raise BridgeUnauthorizedError(f"bridge_unauthorized: Error: HTTP {response.status_code} - {response.text}")
+        elif response.status_code == 503:
+            raise SessionExpiredError("whatsapp_session_expired: The WhatsApp session has expired or is disconnected.")
+        elif response.status_code == 400:
+            text = response.text
+            if "Not connected to WhatsApp" in text:
+                raise SessionExpiredError(f"whatsapp_session_expired: {text}")
+            raise ChatNotFoundError(f"chat_not_found: {text}")
+        elif response.status_code >= 500:
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
-            return False, f"Error: HTTP {response.status_code} - {response.text}"
+            raise ChatNotFoundError(f"chat_not_found: Error: HTTP {response.status_code} - {response.text}")
 
     except requests.RequestException as e:
-        return False, f"Request error: {str(e)}"
-    except json.JSONDecodeError:
-        return False, f"Error parsing response: {response.text}"
+        raise BridgeUnavailableError(f"bridge_unavailable: Request error: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        return False, f"Unexpected error: {str(e)}"
+        if isinstance(e, WhatsAppError):
+            raise
+        raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
 
 
 def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
+    if not recipient:
+        raise InvalidParameterError("invalid_parameters: Recipient must be provided")
+
+    if not media_path:
+        raise InvalidParameterError("invalid_parameters: Media path must be provided")
+
+    if not os.path.isfile(media_path):
+        raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
+
+    check_bridge_health()
+
     try:
-        # Validate input
-        if not recipient:
-            return False, "Recipient must be provided"
-
-        if not media_path:
-            return False, "Media path must be provided"
-
-        if not os.path.isfile(media_path):
-            return False, f"Media file not found: {media_path}"
-
         url = f"{WHATSAPP_API_BASE_URL}/send"
         payload = {"recipient": recipient, "media_path": media_path}
 
@@ -1037,34 +1165,54 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
         if response.status_code == 200:
             result = response.json()
             return result.get("success", False), result.get("message", "Unknown response")
+        elif response.status_code == 401:
+            raise BridgeUnauthorizedError(f"bridge_unauthorized: Error: HTTP {response.status_code} - {response.text}")
+        elif response.status_code == 503:
+            raise SessionExpiredError("whatsapp_session_expired: The WhatsApp session has expired or is disconnected.")
+        elif response.status_code == 400:
+            text = response.text
+            if "Not connected to WhatsApp" in text:
+                raise SessionExpiredError(f"whatsapp_session_expired: {text}")
+            raise ChatNotFoundError(f"chat_not_found: {text}")
+        elif response.status_code >= 500:
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
-            return False, f"Error: HTTP {response.status_code} - {response.text}"
+            raise ChatNotFoundError(f"chat_not_found: Error: HTTP {response.status_code} - {response.text}")
 
     except requests.RequestException as e:
-        return False, f"Request error: {str(e)}"
-    except json.JSONDecodeError:
-        return False, f"Error parsing response: {response.text}"
+        raise BridgeUnavailableError(f"bridge_unavailable: Request error: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        return False, f"Unexpected error: {str(e)}"
+        if isinstance(e, WhatsAppError):
+            raise
+        raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
 
 
 def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
+    if not recipient:
+        raise InvalidParameterError("invalid_parameters: Recipient must be provided")
+
+    if not media_path:
+        raise InvalidParameterError("invalid_parameters: Media path must be provided")
+
+    if not os.path.isfile(media_path):
+        raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
+
+    converted_temp_path = None
+    if not media_path.endswith(".ogg"):
+        try:
+            converted_temp_path = audio.convert_to_opus_ogg_temp(media_path)
+            media_path = converted_temp_path
+        except Exception as e:
+            raise SystemDependencyError(
+                f"internal_error: Error converting file to opus ogg. You likely need to install ffmpeg: {str(e)}"
+            )
+
     try:
-        # Validate input
-        if not recipient:
-            return False, "Recipient must be provided"
-
-        if not media_path:
-            return False, "Media path must be provided"
-
-        if not os.path.isfile(media_path):
-            return False, f"Media file not found: {media_path}"
-
-        if not media_path.endswith(".ogg"):
-            try:
-                media_path = audio.convert_to_opus_ogg_temp(media_path)
-            except Exception as e:
-                return False, f"Error converting file to opus ogg. You likely need to install ffmpeg: {str(e)}"
+        check_bridge_health()
 
         url = f"{WHATSAPP_API_BASE_URL}/send"
         payload = {"recipient": recipient, "media_path": media_path}
@@ -1075,18 +1223,39 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
         if response.status_code == 200:
             result = response.json()
             return result.get("success", False), result.get("message", "Unknown response")
+        elif response.status_code == 401:
+            raise BridgeUnauthorizedError(f"bridge_unauthorized: Error: HTTP {response.status_code} - {response.text}")
+        elif response.status_code == 503:
+            raise SessionExpiredError("whatsapp_session_expired: The WhatsApp session has expired or is disconnected.")
+        elif response.status_code == 400:
+            text = response.text
+            if "Not connected to WhatsApp" in text:
+                raise SessionExpiredError(f"whatsapp_session_expired: {text}")
+            raise ChatNotFoundError(f"chat_not_found: {text}")
+        elif response.status_code >= 500:
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
-            return False, f"Error: HTTP {response.status_code} - {response.text}"
+            raise ChatNotFoundError(f"chat_not_found: Error: HTTP {response.status_code} - {response.text}")
 
     except requests.RequestException as e:
-        return False, f"Request error: {str(e)}"
-    except json.JSONDecodeError:
-        return False, f"Error parsing response: {response.text}"
+        raise BridgeUnavailableError(f"bridge_unavailable: Request error: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        return False, f"Unexpected error: {str(e)}"
+        if isinstance(e, WhatsAppError):
+            raise
+        raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
+    finally:
+        if converted_temp_path and os.path.exists(converted_temp_path):
+            try:
+                os.remove(converted_temp_path)
+            except OSError as e:
+                logger.warning("Failed to remove temporary audio file %s: %s", converted_temp_path, e)
 
 
-def download_media(message_id: str, chat_jid: str) -> str | None:
+def download_media(message_id: str, chat_jid: str) -> str:
     """Download media from a message and return the local file path.
 
     Args:
@@ -1094,8 +1263,13 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
         chat_jid: The JID of the chat containing the message
 
     Returns:
-        The local file path if download was successful, None otherwise
+        The local file path if download was successful
     """
+    if not message_id or not chat_jid:
+        raise InvalidParameterError("invalid_parameters: Message ID and Chat JID are required")
+
+    check_bridge_health()
+
     try:
         url = f"{WHATSAPP_API_BASE_URL}/download"
         payload = {"message_id": message_id, "chat_jid": chat_jid}
@@ -1109,18 +1283,28 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
                 print(f"Media downloaded successfully: {path}")
                 return path
             else:
-                print(f"Download failed: {result.get('message', 'Unknown error')}")
-                return None
+                msg = result.get("message", "Unknown error")
+                raise BridgeUnavailableError(f"bridge_unavailable: Download failed: {msg}")
+        elif response.status_code == 401:
+            raise BridgeUnauthorizedError("bridge_unauthorized: Authentication failed on the bridge.")
+        elif response.status_code == 503:
+            raise SessionExpiredError("whatsapp_session_expired: The WhatsApp session has expired or is disconnected.")
+        elif response.status_code == 400:
+            raise ChatNotFoundError(f"chat_not_found: {response.text}")
+        elif response.status_code >= 500:
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
-            print(f"Error: HTTP {response.status_code} - {response.text}")
-            return None
+            raise ChatNotFoundError(
+                f"chat_not_found: Failed to download media (HTTP {response.status_code}): {response.text}"
+            )
 
     except requests.RequestException as e:
-        print(f"Request error: {str(e)}")
-        return None
-    except json.JSONDecodeError:
-        print(f"Error parsing response: {response.text}")
-        return None
+        raise BridgeUnavailableError(f"bridge_unavailable: Request error: {str(e)}")
+    except json.JSONDecodeError as e:
+        raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        return None
+        if isinstance(e, WhatsAppError):
+            raise
+        raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")

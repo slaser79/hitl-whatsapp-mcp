@@ -10,7 +10,6 @@ import sys
 import tomllib
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -78,7 +77,8 @@ def main() -> int:
         else:
             if pyproject_version != normalized_tag:
                 errors.append(
-                    f"Version mismatch: tag={normalized_tag} != whatsapp-mcp-server/pyproject.toml={pyproject_version}"
+                    f"Version mismatch: tag={normalized_tag} != "
+                    f"whatsapp-mcp-server/pyproject.toml={pyproject_version}"
                 )
 
     if errors:

@@ -2,10 +2,11 @@
 
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+script_dir="$(cd "${BASH_SOURCE[0]%/*}" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 server_dir="$repo_root/whatsapp-mcp-server"
 server_pid=""
+serve_configured=0
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -17,7 +18,9 @@ cleanup() {
     kill "$server_pid" >/dev/null 2>&1 || true
     wait "$server_pid" >/dev/null 2>&1 || true
   fi
-  tailscale serve reset >/dev/null 2>&1 || true
+  if [[ "$serve_configured" == "1" ]]; then
+    tailscale serve reset >/dev/null 2>&1 || true
+  fi
 }
 
 trap cleanup EXIT INT TERM
@@ -60,5 +63,6 @@ uv run main.py &
 server_pid=$!
 
 tailscale serve https / "http://127.0.0.1:${WHATSAPP_MCP_PORT}"
+serve_configured=1
 
 wait "$server_pid"

@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from whatsapp import (
+    AudioConversionError,
     BridgeUnauthorizedError,
     BridgeUnavailableError,
     ChatNotFoundError,
@@ -566,7 +567,7 @@ def send_audio_message(recipient: str, media_path: str) -> dict[str, Any]:
         return {"success": False, "error_code": "chat_not_found", "message": str(e)}
     except LocalFileNotFoundError as e:
         return {"success": False, "error_code": "file_not_found", "message": str(e)}
-    except SystemDependencyError as e:
+    except (SystemDependencyError, AudioConversionError) as e:
         return {"success": False, "error_code": "internal_error", "message": str(e)}
 
 

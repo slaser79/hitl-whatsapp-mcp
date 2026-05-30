@@ -1,3 +1,4 @@
+import pytest
 import requests
 
 import main
@@ -16,6 +17,7 @@ class DummyResponse:
 
 def test_bridge_unavailable(monkeypatch, tmp_path):
     """If the bridge is unreachable, tools return bridge_unavailable error."""
+
     def fake_get_fail(url, headers=None, timeout=None):
         raise requests.ConnectionError("Connection refused")
 
@@ -53,6 +55,7 @@ def test_bridge_unavailable(monkeypatch, tmp_path):
 
 def test_whatsapp_session_expired(monkeypatch, tmp_path):
     """If the session is expired, tools return whatsapp_session_expired error."""
+
     # Mock /api/health to return 503 Service Unavailable / disconnected
     def fake_get_disconnected(url, headers=None, timeout=None):
         return DummyResponse(status_code=503, payload={"status": "disconnected", "connected": False})
@@ -90,6 +93,7 @@ def test_whatsapp_session_expired(monkeypatch, tmp_path):
 
 def test_chat_not_found_on_send(monkeypatch, tmp_path):
     """If chat is invalid/unknown (400 Bad Request from bridge), send tools return chat_not_found."""
+
     # Health check passes
     def fake_get_ok(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
@@ -123,6 +127,7 @@ def test_chat_not_found_on_send(monkeypatch, tmp_path):
 
 def test_chat_not_found_on_download(monkeypatch):
     """If message/chat is invalid/unknown on download (400/500), download_media returns chat_not_found."""
+
     def fake_get_ok(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
 
@@ -155,6 +160,7 @@ def test_local_file_not_found():
 
 def test_bridge_unauthorized(monkeypatch, tmp_path):
     """If the bridge returns HTTP 401, tools return bridge_unauthorized."""
+
     def fake_get_ok(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
 
@@ -197,6 +203,12 @@ def test_audio_conversion_failure(tmp_path):
     dummy_file.write_text("not an audio file")
     media_path = str(dummy_file)
 
+    # 1) Direct call to whatsapp.send_audio_message should raise AudioConversionError
+    with pytest.raises(whatsapp.AudioConversionError) as exc_info:
+        whatsapp.send_audio_message(recipient="12025551234", media_path=media_path)
+    assert "Error converting file to opus ogg" in str(exc_info.value)
+
+    # 2) Tool call to main.send_audio_message should catch it and return internal_error
     res = main.send_audio_message(recipient="12025551234", media_path=media_path)
     assert res["success"] is False
     assert res["error_code"] == "internal_error"
@@ -205,6 +217,7 @@ def test_audio_conversion_failure(tmp_path):
 
 def test_health_check_200_disconnected(monkeypatch):
     """If /api/health returns 200 but connected is False, check_bridge_health raises SessionExpiredError."""
+
     def fake_get_disconnected_200(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "disconnected", "connected": False})
 
@@ -218,12 +231,14 @@ def test_health_check_200_disconnected(monkeypatch):
 
 def test_download_media_non_json(monkeypatch):
     """If download_media receives a non-JSON 200 response, it is caught as bridge_unavailable."""
+
     def fake_get_ok(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
 
     class MalformedResponse(DummyResponse):
         def json(self):
             import json
+
             raise json.JSONDecodeError("Expecting value", "", 0)
 
     def fake_post_malformed(url, json, headers=None):
@@ -236,4 +251,3 @@ def test_download_media_non_json(monkeypatch):
     assert res["success"] is False
     assert res["error_code"] == "bridge_unavailable"
     assert "bridge_unavailable" in res["message"]
-

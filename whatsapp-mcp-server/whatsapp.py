@@ -13,36 +13,49 @@ import audio
 
 class WhatsAppError(Exception):
     """Base class for all WhatsApp/Bridge errors."""
+
     pass
 
 
 class BridgeUnavailableError(WhatsAppError):
     """Raised when the Go whatsmeow bridge is down/crashed/unreachable."""
+
     pass
 
 
 class BridgeUnauthorizedError(WhatsAppError):
     """Raised when the Go whatsmeow bridge returns HTTP 401 (Unauthorized)."""
+
     pass
 
 
 class SessionExpiredError(WhatsAppError):
     """Raised when the WhatsApp session is expired or disconnected."""
+
     pass
 
 
 class ChatNotFoundError(WhatsAppError):
     """Raised when a recipient chat/JID is not found or is invalid."""
+
     pass
 
 
 class LocalFileNotFoundError(WhatsAppError):
     """Raised when a local file to be sent is not found on the filesystem."""
+
+    pass
+
+
+class AudioConversionError(WhatsAppError):
+    """Raised when conversion of audio using FFmpeg fails."""
+
     pass
 
 
 class SystemDependencyError(WhatsAppError):
     """Raised when a system dependency (like ffmpeg) is missing or fails."""
+
     pass
 
 
@@ -1136,7 +1149,16 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError)):
+        if isinstance(
+            e,
+            (
+                BridgeUnavailableError,
+                BridgeUnauthorizedError,
+                SessionExpiredError,
+                ChatNotFoundError,
+                LocalFileNotFoundError,
+            ),
+        ):
             raise
         return False, f"Unexpected error: {str(e)}"
 
@@ -1157,9 +1179,8 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
             converted_temp_path = audio.convert_to_opus_ogg_temp(media_path)
             media_path = converted_temp_path
         except Exception as e:
-            raise SystemDependencyError(
-                f"internal_error: Error converting file to opus ogg. "
-                f"You likely need to install ffmpeg: {str(e)}"
+            raise AudioConversionError(
+                f"internal_error: Error converting file to opus ogg. You likely need to install ffmpeg: {str(e)}"
             )
 
     try:
@@ -1191,7 +1212,18 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError, SystemDependencyError)):
+        if isinstance(
+            e,
+            (
+                BridgeUnavailableError,
+                BridgeUnauthorizedError,
+                SessionExpiredError,
+                ChatNotFoundError,
+                LocalFileNotFoundError,
+                SystemDependencyError,
+                AudioConversionError,
+            ),
+        ):
             raise
         return False, f"Unexpected error: {str(e)}"
     finally:
@@ -1230,7 +1262,7 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
                 print(f"Media downloaded successfully: {path}")
                 return path
             else:
-                msg = result.get('message', 'Unknown error')
+                msg = result.get("message", "Unknown error")
                 raise ChatNotFoundError(f"chat_not_found: Download failed: {msg}")
         elif response.status_code == 401:
             raise BridgeUnauthorizedError("bridge_unauthorized: Authentication failed on the bridge.")

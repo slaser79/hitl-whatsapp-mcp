@@ -93,16 +93,21 @@
           # Let uv use the Nix-provided interpreter instead of downloading one.
           env.UV_PYTHON_DOWNLOADS = "never";
 
+          # Banner goes to stderr so `nix develop -c <cmd>` command substitutions
+          # (e.g. $(nix develop -c openssl rand -hex 24)) capture only <cmd>'s
+          # stdout, not this shell-hook text.
           shellHook = ''
-            echo "hitl-whatsapp-mcp dev shell"
-            echo "  go      : $(go version 2>/dev/null)"
-            echo "  python  : $(python3 --version 2>/dev/null)"
-            echo "  uv      : $(uv --version 2>/dev/null)"
-            echo "  ffmpeg  : $(ffmpeg -version 2>/dev/null | head -n1)"
-            echo
-            echo "Bridge : cd whatsapp-bridge && go run ."
-            echo "Server : cd whatsapp-mcp-server && uv run main.py"
-            echo "Or build the bridge via nix: nix build .#whatsapp-bridge"
+            {
+              echo "hitl-whatsapp-mcp dev shell"
+              echo "  go      : $(go version 2>/dev/null)"
+              echo "  python  : $(python3 --version 2>/dev/null)"
+              echo "  uv      : $(uv --version 2>/dev/null)"
+              echo "  ffmpeg  : $(ffmpeg -version 2>/dev/null | head -n1)"
+              echo
+              echo "Bridge : cd whatsapp-bridge && go run ."
+              echo "Server : cd whatsapp-mcp-server && uv run main.py"
+              echo "Or build the bridge via nix: nix build .#whatsapp-bridge"
+            } >&2
           '';
         };
       }

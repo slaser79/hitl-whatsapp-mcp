@@ -1,6 +1,7 @@
 """Tests for the Tailscale Serve run script."""
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -58,6 +59,44 @@ exit 0
 
     assert result.returncode != 0
     assert "Tailscale is not connected" in result.stderr
+    assert "tailscale up" in result.stderr
+    assert not log_file.exists()
+
+
+def test_run_tailscale_serve_reports_missing_tailscale_binary(tmp_path):
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log_file = tmp_path / "calls.log"
+
+    for exe in ("bash", "python3"):
+        target = shutil.which(exe)
+        assert target is not None
+        (bin_dir / exe).symlink_to(target)
+
+    _write_executable(
+        bin_dir / "uv",
+        f"""#!/usr/bin/env bash
+set -euo pipefail
+echo "uv:$*" >>"{log_file}"
+exit 0
+""",
+    )
+
+    env = os.environ.copy()
+    env["PATH"] = str(bin_dir)
+    env["WHATSAPP_MCP_TOKEN"] = VALID_TOKEN
+
+    result = subprocess.run(
+        [str(SCRIPT)],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Tailscale is not installed" in result.stderr
     assert "tailscale up" in result.stderr
     assert not log_file.exists()
 

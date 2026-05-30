@@ -28,14 +28,35 @@ export WHATSAPP_MCP_TOKEN="$(openssl rand -hex 24)"
 
 That token is for the MCP client/UI, not the bridge.
 
+> **Tip:** instead of exporting the token each time, put it in a `.env` file at
+> the repo root (it's gitignored). `run-tailscale-serve.sh` loads it
+> automatically:
+>
+> ```bash
+> echo "WHATSAPP_MCP_TOKEN=$(openssl rand -hex 24)" >> .env
+> ```
+
 ## 4. Start the remote MCP server behind Tailscale Serve
 
 ```bash
 ./scripts/run-tailscale-serve.sh
 ```
 
-This keeps the MCP server on `127.0.0.1`, requires auth, and exposes it over
-your tailnet via Tailscale TLS.
+This keeps the MCP server on `127.0.0.1`, requires auth, exposes it over your
+tailnet via Tailscale TLS, and auto-allows your node's MagicDNS name as a trusted
+`Host` (otherwise the proxied request is rejected with HTTP 421). One-time setup:
+the script needs Tailscale operator rights — run `sudo tailscale set --operator=$USER`
+once if Serve reports "access denied".
+
+If this host already serves other Tailscale services on port 443, pick a
+different HTTPS port:
+
+```bash
+WHATSAPP_MCP_SERVE_HTTPS_PORT=8443 ./scripts/run-tailscale-serve.sh
+```
+
+The script prints the exact tailnet URL (e.g.
+`https://my-host.tailnet-name.ts.net:8443/mcp`).
 
 ### Tailnet-only exposure check
 
@@ -45,8 +66,10 @@ unreachable from the public internet.
 
 ## 5. Connect the client
 
-Use the tailnet URL plus the token from step 3 in your MCP client or hitl-app.
-Send `Authorization: Bearer $WHATSAPP_MCP_TOKEN` or `X-API-Key: $WHATSAPP_MCP_TOKEN`.
+Use the tailnet URL the script printed, plus the token from step 3, in your MCP
+client or hitl-app. The transport is **streamable HTTP** and the endpoint path is
+`/mcp`. Send `Authorization: Bearer $WHATSAPP_MCP_TOKEN` or
+`X-API-Key: $WHATSAPP_MCP_TOKEN`.
 
 ## 6. Quick egress sanity check
 

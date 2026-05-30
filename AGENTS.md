@@ -107,6 +107,7 @@ A failing blocking job is a hard block — fix it or explain in the PR why it's 
 | `WHATSAPP_MCP_PORT` | `8089` | Port for MCP `http`/`sse` transports |
 | `WHATSAPP_MCP_AUTH` | `on` | Require bearer/API-key auth for MCP `http`/`sse`; `off` is only allowed on loopback |
 | `WHATSAPP_MCP_TOKEN` | *(none)* | Client-facing MCP token, distinct from `WHATSAPP_BRIDGE_TOKEN`; required when auth is on |
+| `WHATSAPP_MCP_ALLOWED_HOSTS` | *(none)* | Comma-separated extra `Host` headers to trust for MCP `http`/`sse` (loopback always allowed); required behind a reverse proxy like Tailscale Serve |
 | `WEBHOOK_URL` | `http://localhost:8769/whatsapp/webhook` | Outgoing webhook for incoming messages (empty = disabled) |
 | `FORWARD_SELF` | `false` | Whether self-sent messages are forwarded |
 

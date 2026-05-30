@@ -47,6 +47,7 @@ exit 0
     env = os.environ.copy()
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
     env["WHATSAPP_MCP_TOKEN"] = VALID_TOKEN
+    env["WHATSAPP_ENV_FILE"] = str(tmp_path / "absent.env")
 
     result = subprocess.run(
         [str(SCRIPT)],
@@ -85,6 +86,7 @@ exit 0
     env = os.environ.copy()
     env["PATH"] = str(bin_dir)
     env["WHATSAPP_MCP_TOKEN"] = VALID_TOKEN
+    env["WHATSAPP_ENV_FILE"] = str(tmp_path / "absent.env")
 
     result = subprocess.run(
         [str(SCRIPT)],
@@ -112,14 +114,7 @@ def test_run_tailscale_serve_launches_loopback_server_and_serve(tmp_path):
         f"""#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == "status" && "$2" == "--json" ]]; then
-  printf '%s' '{{"BackendState":"Running"}}'
-  exit 0
-fi
-if [[ "$1" == "serve" && "$2" == "https" && "$3" == "/" && "$4" == "http://127.0.0.1:8089" ]]; then
-  echo "tailscale:$*" >>"{log_file}"
-  exit 0
-fi
-if [[ "$1" == "serve" && "$2" == "reset" ]]; then
+  printf '%s' '{{"BackendState":"Running","Self":{{"DNSName":"node.example.ts.net."}}}}'
   exit 0
 fi
 echo "tailscale:$*" >>"{log_file}"
@@ -139,6 +134,7 @@ exit 0
     env = os.environ.copy()
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
     env["WHATSAPP_MCP_TOKEN"] = VALID_TOKEN
+    env["WHATSAPP_ENV_FILE"] = str(tmp_path / "absent.env")
 
     result = subprocess.run(
         [str(SCRIPT)],
@@ -150,12 +146,18 @@ exit 0
     )
 
     assert result.returncode == 0
-    assert "uv:run main.py" in log_file.read_text()
-    assert "tailscale:serve https / http://127.0.0.1:8089" in log_file.read_text()
+    calls = log_file.read_text()
+    assert "uv:run main.py" in calls
+    # Modern Serve syntax, default HTTPS port 443 -> loopback MCP port 8089.
+    assert "tailscale:serve --bg --https 443 8089" in calls
     uv_env = uv_env_file.read_text()
     assert "WHATSAPP_MCP_TRANSPORT=http" in uv_env
     assert "WHATSAPP_MCP_HOST=127.0.0.1" in uv_env
     assert "WHATSAPP_MCP_AUTH=on" in uv_env
+    # The node's own MagicDNS name is auto-added to the Host allow-list.
+    assert "WHATSAPP_MCP_ALLOWED_HOSTS=node.example.ts.net:*" in uv_env
+    # Tailnet URL is surfaced to the user.
+    assert "https://node.example.ts.net:443/mcp" in result.stdout
 
 
 def test_run_tailscale_serve_does_not_reset_serve_on_early_exit(tmp_path):
@@ -189,6 +191,7 @@ exit 0
 
     env = os.environ.copy()
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    env["WHATSAPP_ENV_FILE"] = str(tmp_path / "absent.env")
     env.pop("WHATSAPP_MCP_TOKEN", None)  # force the early token-validation failure
 
     result = subprocess.run([str(SCRIPT)], cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False)

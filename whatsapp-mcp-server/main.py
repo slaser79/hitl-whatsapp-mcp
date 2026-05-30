@@ -7,6 +7,7 @@ from functools import wraps
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -72,6 +73,11 @@ TRANSPORT_ALIASES = {
 DEFAULT_MCP_HOST = "127.0.0.1"
 DEFAULT_MCP_PORT = 8089
 MIN_MCP_TOKEN_LENGTH = 32
+# FastMCP enables DNS-rebinding protection and trusts only loopback Host headers
+# when bound to 127.0.0.1. A reverse proxy such as Tailscale Serve forwards the
+# original tailnet Host header (e.g. host.ts.net:8443), which is rejected with
+# HTTP 421 unless that hostname is added via WHATSAPP_MCP_ALLOWED_HOSTS.
+DEFAULT_DNS_REBINDING_HOSTS = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
 MCP_TOKEN_PLACEHOLDER_MARKERS = (
     "changeme",
     "change-me",
@@ -111,6 +117,19 @@ def resolve_auth_enabled(value: str | None) -> bool:
     if normalized == "off":
         return False
     raise SystemExit(f"Invalid WHATSAPP_MCP_AUTH={value!r}; valid values: on, off")
+
+
+def resolve_allowed_hosts(value: str | None) -> list[str] | None:
+    """Parse WHATSAPP_MCP_ALLOWED_HOSTS into a Host allow-list, or None if unset.
+
+    Returns the loopback defaults plus each comma-separated host (the SDK matcher
+    accepts ``host:*`` wildcard-port patterns). Returns None when no extra hosts
+    are configured, preserving FastMCP's loopback-only default behaviour.
+    """
+    extra = [host.strip() for host in (value or "").split(",") if host.strip()]
+    if not extra:
+        return None
+    return [*DEFAULT_DNS_REBINDING_HOSTS, *extra]
 
 
 def is_loopback_host(host: str) -> bool:
@@ -587,9 +606,17 @@ def shutdown_handler(signum, frame):
 
 
 def configure_remote_transport() -> None:
-    """Apply host/port environment settings for http/sse transports."""
+    """Apply host/port and DNS-rebinding settings for http/sse transports."""
     mcp.settings.host = os.getenv("WHATSAPP_MCP_HOST", DEFAULT_MCP_HOST)
     mcp.settings.port = resolve_port(os.getenv("WHATSAPP_MCP_PORT"))
+
+    allowed_hosts = resolve_allowed_hosts(os.getenv("WHATSAPP_MCP_ALLOWED_HOSTS"))
+    if allowed_hosts is not None:
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=allowed_hosts,
+            allowed_origins=allowed_hosts,
+        )
 
 
 def run_mcp_server() -> None:

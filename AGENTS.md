@@ -71,6 +71,11 @@ uv run ruff check .         # lint
 uv run ruff format .        # format
 ```
 
+> **Managing the long-running bridge/server:** kill them by listening PID/port
+> (e.g. `ss -ltnp | grep :8089`), **not** `pkill -f "uv run main.py"` — that
+> pattern also matches the very shell you launch the kill from, so it kills its
+> own parent (seen as a spurious exit code) and orphans the restart.
+
 ## CI gates
 
 Every PR runs (see `.github/workflows/`). Not every job is blocking today:

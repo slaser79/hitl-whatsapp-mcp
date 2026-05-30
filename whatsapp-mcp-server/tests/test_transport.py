@@ -11,6 +11,26 @@ import main
 from main import resolve_port, resolve_transport
 
 SERVER_DIR = Path(__file__).resolve().parents[1]
+RUN_SERVER_WITH_FAKE_RUN = """
+import main
+
+calls = []
+
+
+def fake_run(*, transport):
+    calls.append(transport)
+
+
+main.mcp.run = fake_run
+main.run_mcp_server()
+assert calls
+"""
+
+
+@pytest.fixture(autouse=True)
+def reset_mcp_bind_settings(monkeypatch):
+    monkeypatch.setattr(main.mcp.settings, "host", "127.0.0.1")
+    monkeypatch.setattr(main.mcp.settings, "port", 8089)
 
 
 class TestResolveTransport:
@@ -68,6 +88,8 @@ def test_fastmcp_default_bind_matches_env_contract():
 )
 def test_run_mcp_server_uses_configured_transport(monkeypatch, capsys, env_value, expected_transport):
     calls = []
+    monkeypatch.delenv("WHATSAPP_MCP_HOST", raising=False)
+    monkeypatch.delenv("WHATSAPP_MCP_PORT", raising=False)
 
     if env_value is None:
         monkeypatch.delenv("WHATSAPP_MCP_TRANSPORT", raising=False)
@@ -89,6 +111,42 @@ def test_run_mcp_server_uses_configured_transport(monkeypatch, capsys, env_value
         assert f"via {expected_transport}" in captured.err
 
 
+def test_run_mcp_server_applies_remote_bind_settings(monkeypatch):
+    calls = []
+    monkeypatch.setenv("WHATSAPP_MCP_TRANSPORT", "http")
+    monkeypatch.setenv("WHATSAPP_MCP_HOST", "0.0.0.0")
+    monkeypatch.setenv("WHATSAPP_MCP_PORT", "9090")
+
+    def fake_run(*, transport):
+        calls.append(transport)
+
+    monkeypatch.setattr(main.mcp, "run", fake_run)
+
+    main.run_mcp_server()
+
+    assert calls == ["streamable-http"]
+    assert main.mcp.settings.host == "0.0.0.0"
+    assert main.mcp.settings.port == 9090
+
+
+def test_stdio_import_and_run_ignore_invalid_port_env():
+    env = os.environ.copy()
+    env["WHATSAPP_MCP_TRANSPORT"] = "stdio"
+    env["WHATSAPP_MCP_PORT"] = "not-a-number"
+
+    result = subprocess.run(
+        [sys.executable, "-c", RUN_SERVER_WITH_FAKE_RUN],
+        cwd=SERVER_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "Invalid WHATSAPP_MCP_PORT" not in result.stderr
+
+
 def test_invalid_transport_env_exits_nonzero():
     env = os.environ.copy()
     env["WHATSAPP_MCP_TRANSPORT"] = "websocket"
@@ -106,12 +164,14 @@ def test_invalid_transport_env_exits_nonzero():
     assert "Invalid WHATSAPP_MCP_TRANSPORT='websocket'" in result.stderr
 
 
-def test_invalid_port_env_exits_nonzero():
+@pytest.mark.parametrize("transport", ["http", "sse"])
+def test_invalid_port_env_exits_nonzero_for_remote_transport(transport):
     env = os.environ.copy()
+    env["WHATSAPP_MCP_TRANSPORT"] = transport
     env["WHATSAPP_MCP_PORT"] = "not-a-number"
 
     result = subprocess.run(
-        [sys.executable, "-c", "import main"],
+        [sys.executable, "-c", RUN_SERVER_WITH_FAKE_RUN],
         cwd=SERVER_DIR,
         env=env,
         capture_output=True,

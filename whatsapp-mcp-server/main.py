@@ -54,6 +54,7 @@ TRANSPORT_ALIASES = {
     "streamable_http": "streamable-http",
     "sse": "sse",
 }
+DEFAULT_MCP_HOST = "127.0.0.1"
 DEFAULT_MCP_PORT = 8089
 
 
@@ -77,12 +78,12 @@ def resolve_port(value: str | None) -> int:
         raise SystemExit(f"Invalid WHATSAPP_MCP_PORT={value!r}; must be an integer")
 
 
-# Initialize FastMCP server. Host/port only apply to the http/sse transports;
-# the localhost default keeps a remote server unreachable until explicitly opened up.
+# Initialize FastMCP server without reading host/port from the environment.
+# Stdio clients import this module too, and host/port only apply to http/sse.
 mcp = FastMCP(
     "whatsapp",
-    host=os.getenv("WHATSAPP_MCP_HOST", "127.0.0.1"),
-    port=resolve_port(os.getenv("WHATSAPP_MCP_PORT")),
+    host=DEFAULT_MCP_HOST,
+    port=DEFAULT_MCP_PORT,
 )
 
 
@@ -418,12 +419,20 @@ def shutdown_handler(signum, frame):
     sys.exit(0)
 
 
+def configure_remote_transport() -> None:
+    """Apply host/port environment settings for http/sse transports."""
+    mcp.settings.host = os.getenv("WHATSAPP_MCP_HOST", DEFAULT_MCP_HOST)
+    mcp.settings.port = resolve_port(os.getenv("WHATSAPP_MCP_PORT"))
+
+
 def run_mcp_server() -> None:
     """Run the MCP server using environment-driven transport settings."""
     transport = resolve_transport(os.getenv("WHATSAPP_MCP_TRANSPORT"))
     if transport == "stdio":
         mcp.run(transport="stdio")
         return
+
+    configure_remote_transport()
 
     # stdout is reserved for the protocol on stdio; log startup to stderr.
     print(

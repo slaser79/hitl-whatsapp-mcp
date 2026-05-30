@@ -41,8 +41,8 @@ class TestResolvePort:
     """Tests for resolve_port()."""
 
     def test_default(self):
-        assert resolve_port(None) == 8080
-        assert resolve_port("") == 8080
+        assert resolve_port(None) == 8089
+        assert resolve_port("") == 8089
 
     def test_valid(self):
         assert resolve_port("9000") == 9000
@@ -54,7 +54,7 @@ class TestResolvePort:
 
 def test_fastmcp_default_bind_matches_env_contract():
     assert main.mcp.settings.host == "127.0.0.1"
-    assert main.mcp.settings.port == 8080
+    assert main.mcp.settings.port == 8089
 
 
 @pytest.mark.parametrize(

@@ -54,6 +54,7 @@ TRANSPORT_ALIASES = {
     "streamable_http": "streamable-http",
     "sse": "sse",
 }
+DEFAULT_MCP_PORT = 8089
 
 
 def resolve_transport(value: str | None) -> str:
@@ -67,9 +68,9 @@ def resolve_transport(value: str | None) -> str:
 
 
 def resolve_port(value: str | None) -> int:
-    """Parse WHATSAPP_MCP_PORT, falling back to this server's default of 8080."""
+    """Parse WHATSAPP_MCP_PORT, falling back to this server's default port."""
     if not value:
-        return 8080
+        return DEFAULT_MCP_PORT
     try:
         return int(value)
     except ValueError:

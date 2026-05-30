@@ -295,7 +295,7 @@ Copy `.env.example` to `.env` and configure as needed:
 | `WHATSAPP_MEDIA_ROOTS` | `~/.local/share/whatsapp-mcp/outbox`     | Path-list of directories allowed for outbound media files |
 | `WHATSAPP_MCP_TRANSPORT` | `stdio`                                | MCP transport to serve clients: `stdio`, `http`, or `sse` |
 | `WHATSAPP_MCP_HOST`    | `127.0.0.1`                              | Bind address for the `http`/`sse` transports |
-| `WHATSAPP_MCP_PORT`    | `8080`                                   | Port for the `http`/`sse` transports |
+| `WHATSAPP_MCP_PORT`    | `8089`                                   | Port for the `http`/`sse` transports |
 
 ### MCP transport (stdio vs http/sse)
 
@@ -305,7 +305,7 @@ instead, set `WHATSAPP_MCP_TRANSPORT`:
 
 ```bash
 # Streamable HTTP (current spec transport for remote MCP), endpoint at /mcp
-WHATSAPP_MCP_TRANSPORT=http WHATSAPP_MCP_PORT=8080 uv run main.py
+WHATSAPP_MCP_TRANSPORT=http WHATSAPP_MCP_PORT=8089 uv run main.py
 
 # Legacy Server-Sent Events transport (deprecated in the MCP spec), endpoint at /sse
 WHATSAPP_MCP_TRANSPORT=sse uv run main.py

@@ -49,7 +49,12 @@ A Model Context Protocol (MCP) server for WhatsApp, enabling Claude to read and 
    `whatsapp-bridge/store/.bridge-token`. Scan the QR code with WhatsApp on
    your phone to authenticate.
 
-3. **Configure Claude Desktop**
+3. **Use the remote self-hosting guide**
+
+   For the Tailscale Serve setup, copy-paste self-hosting steps, token rotation,
+   and egress check, see [`SETUP.md`](./SETUP.md).
+
+4. **Configure Claude Desktop**
 
    Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -71,7 +76,7 @@ A Model Context Protocol (MCP) server for WhatsApp, enabling Claude to read and 
 
    Replace `/path/to/whatsapp-mcp` with your actual path.
 
-4. **Restart Claude Desktop**
+5. **Restart Claude Desktop**
 
 ### Updating
 

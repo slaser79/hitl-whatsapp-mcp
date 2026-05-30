@@ -266,6 +266,7 @@ def test_bridge_500_status_code(monkeypatch):
 
 def test_download_media_success_false(monkeypatch):
     """If download_media receives response 200 but success is False, it is caught as bridge_unavailable."""
+
     def fake_get_ok(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
 

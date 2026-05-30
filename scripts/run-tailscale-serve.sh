@@ -7,6 +7,7 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 server_dir="$repo_root/whatsapp-mcp-server"
 server_pid=""
 serve_configured=0
+serve_path="${WHATSAPP_MCP_SERVE_PATH:-/whatsapp-mcp}"
 
 fail() {
   printf '%s\n' "$1" >&2
@@ -20,7 +21,7 @@ cleanup() {
   fi
 
   if [[ "$serve_configured" -eq 1 ]]; then
-    tailscale serve reset >/dev/null 2>&1 || true
+    tailscale serve "$serve_path" off >/dev/null 2>&1 || true
   fi
 }
 
@@ -63,7 +64,7 @@ cd "$server_dir"
 uv run main.py &
 server_pid=$!
 
-tailscale serve https / "http://127.0.0.1:${WHATSAPP_MCP_PORT}"
+tailscale serve https "$serve_path" "http://127.0.0.1:${WHATSAPP_MCP_PORT}"
 serve_configured=1
 
 wait "$server_pid"

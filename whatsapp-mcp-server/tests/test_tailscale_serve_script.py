@@ -28,7 +28,7 @@ if [[ "$1" == "status" && "$2" == "--json" ]]; then
   printf '%s' '{{"BackendState":"Stopped"}}'
   exit 0
 fi
-if [[ "$1" == "serve" && "$2" == "reset" ]]; then
+if [[ "$1" == "serve" && "$2" == "/whatsapp-mcp" && "$3" == "off" ]]; then
   echo "tailscale:$*" >>"{log_file}"
   exit 0
 fi
@@ -77,7 +77,7 @@ if [[ "$1" == "status" && "$2" == "--json" ]]; then
   printf '%s' '{{"BackendState":"Running"}}'
   exit 0
 fi
-if [[ "$1" == "serve" && "$2" == "reset" ]]; then
+if [[ "$1" == "serve" && "$2" == "/whatsapp-mcp" && "$3" == "off" ]]; then
   echo "tailscale:$*" >>"{log_file}"
   exit 0
 fi
@@ -133,7 +133,8 @@ exit 0
     )
 
     env = os.environ.copy()
-    env["PATH"] = str(bin_dir)
+    path_parts = [part for part in env["PATH"].split(":") if not shutil.which("tailscale", path=part)]
+    env["PATH"] = f"{bin_dir}:" + ":".join(path_parts)
     env["WHATSAPP_MCP_TOKEN"] = VALID_TOKEN
 
     result = subprocess.run(
@@ -165,11 +166,11 @@ if [[ "$1" == "status" && "$2" == "--json" ]]; then
   printf '%s' '{{"BackendState":"Running"}}'
   exit 0
 fi
-if [[ "$1" == "serve" && "$2" == "https" && "$3" == "/" && "$4" == "http://127.0.0.1:8089" ]]; then
+if [[ "$1" == "serve" && "$2" == "https" && "$3" == "/whatsapp-mcp" && "$4" == "http://127.0.0.1:8089" ]]; then
   echo "tailscale:$*" >>"{log_file}"
   exit 0
 fi
-if [[ "$1" == "serve" && "$2" == "reset" ]]; then
+if [[ "$1" == "serve" && "$2" == "/whatsapp-mcp" && "$3" == "off" ]]; then
   echo "tailscale:$*" >>"{log_file}"
   exit 0
 fi
@@ -190,6 +191,7 @@ exit 0
     env = os.environ.copy()
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
     env["WHATSAPP_MCP_TOKEN"] = VALID_TOKEN
+    env["WHATSAPP_MCP_SERVE_PATH"] = "/whatsapp-mcp"
 
     result = subprocess.run(
         [str(SCRIPT)],
@@ -202,7 +204,7 @@ exit 0
 
     assert result.returncode == 0
     assert "uv:run main.py" in log_file.read_text()
-    assert "tailscale:serve https / http://127.0.0.1:8089" in log_file.read_text()
+    assert "tailscale:serve https /whatsapp-mcp http://127.0.0.1:8089" in log_file.read_text()
     uv_env = uv_env_file.read_text()
     assert "WHATSAPP_MCP_TRANSPORT=http" in uv_env
     assert "WHATSAPP_MCP_HOST=127.0.0.1" in uv_env

@@ -35,7 +35,8 @@ That token is for the MCP client/UI, not the bridge.
 ```
 
 This keeps the MCP server on `127.0.0.1`, requires auth, and exposes it over
-your tailnet via Tailscale TLS.
+your tailnet via Tailscale TLS. The script serves at `/whatsapp-mcp` by default;
+set `WHATSAPP_MCP_SERVE_PATH` before running it if you want a different path.
 
 ### Tailnet-only exposure check
 
@@ -66,4 +67,4 @@ restart.
 ## 8. Stop / reset
 
 Press `Ctrl+C` in the run script terminal. It stops the server and resets the
-Tailscale Serve configuration.
+Tailscale Serve configuration for the configured mount path.

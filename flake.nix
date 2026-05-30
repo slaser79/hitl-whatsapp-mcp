@@ -38,6 +38,11 @@
 
           env.CGO_ENABLED = "1";
           nativeBuildInputs = [ pkgs.pkg-config ];
+          # mattn/go-sqlite3 vendors its own SQLite amalgamation and compiles it
+          # via CGO, so the build needs only a C toolchain (already provided by
+          # buildGoModule). SQLite is listed explicitly to make the C dependency
+          # intent clear and future-proof against build-tag changes.
+          buildInputs = [ pkgs.sqlite ];
 
           # The whatsmeow bridge has no Go test files wired for `go test`; skip
           # the check phase to keep the build hermetic and fast.

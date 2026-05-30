@@ -41,8 +41,8 @@ class LocalFileNotFoundError(WhatsAppError):
     pass
 
 
-class AudioConversionError(WhatsAppError):
-    """Raised when conversion of audio using FFmpeg fails."""
+class SystemDependencyError(WhatsAppError):
+    """Raised when a system dependency (like ffmpeg) is missing or fails."""
     pass
 
 
@@ -1151,18 +1151,20 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
     if not os.path.isfile(media_path):
         raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
 
+    converted_temp_path = None
     if not media_path.endswith(".ogg"):
         try:
-            media_path = audio.convert_to_opus_ogg_temp(media_path)
+            converted_temp_path = audio.convert_to_opus_ogg_temp(media_path)
+            media_path = converted_temp_path
         except Exception as e:
-            raise AudioConversionError(
+            raise SystemDependencyError(
                 f"internal_error: Error converting file to opus ogg. "
                 f"You likely need to install ffmpeg: {str(e)}"
             )
 
-    check_bridge_health()
-
     try:
+        check_bridge_health()
+
         url = f"{WHATSAPP_API_BASE_URL}/send"
         payload = {"recipient": recipient, "media_path": media_path}
 
@@ -1189,9 +1191,15 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError, AudioConversionError)):
+        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError, SystemDependencyError)):
             raise
         return False, f"Unexpected error: {str(e)}"
+    finally:
+        if converted_temp_path and os.path.exists(converted_temp_path):
+            try:
+                os.remove(converted_temp_path)
+            except OSError:
+                pass
 
 
 def download_media(message_id: str, chat_jid: str) -> str | None:

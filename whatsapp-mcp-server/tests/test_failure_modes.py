@@ -358,3 +358,16 @@ def test_send_success_false(monkeypatch, tmp_path):
     assert res["success"] is False
     assert res["error_code"] == "chat_not_found"
     assert "chat_not_found" in res["message"]
+
+
+def test_bridge_health_unauthorized(monkeypatch):
+    """If /api/health returns HTTP 401 or 403, check_bridge_health raises BridgeUnauthorizedError."""
+    def fake_get_unauthorized(url, headers=None, timeout=None):
+        return DummyResponse(status_code=401, text="Unauthorized")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_unauthorized)
+
+    res = main.send_message(recipient="12025551234", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unauthorized"
+    assert "bridge_unauthorized" in res["message"]

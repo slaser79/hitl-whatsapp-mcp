@@ -129,6 +129,13 @@ def check_bridge_health() -> None:
         _last_health_check_time = now
         raise _last_health_check_error
 
+    if response.status_code in (401, 403):
+        _last_health_check_error = BridgeUnauthorizedError(
+            f"bridge_unauthorized: Authentication failed on the bridge (HTTP {response.status_code})."
+        )
+        _last_health_check_time = now
+        raise _last_health_check_error
+
     if response.status_code == 503:
         _last_health_check_error = SessionExpiredError(
             "whatsapp_session_expired: The WhatsApp session has expired or is disconnected. "

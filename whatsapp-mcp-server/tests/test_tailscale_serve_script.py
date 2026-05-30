@@ -191,9 +191,7 @@ exit 0
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
     env.pop("WHATSAPP_MCP_TOKEN", None)  # force the early token-validation failure
 
-    result = subprocess.run(
-        [str(SCRIPT)], cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False
-    )
+    result = subprocess.run([str(SCRIPT)], cwd=REPO_ROOT, env=env, capture_output=True, text=True, check=False)
 
     assert result.returncode != 0
     assert "WHATSAPP_MCP_TOKEN is required" in result.stderr

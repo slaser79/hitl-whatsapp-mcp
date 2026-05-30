@@ -17,36 +17,49 @@ logger = logging.getLogger("whatsapp-mcp-server")
 
 class WhatsAppError(Exception):
     """Base class for all WhatsApp/Bridge errors."""
+
     pass
 
 
 class BridgeUnavailableError(WhatsAppError):
     """Raised when the Go whatsmeow bridge is down/crashed/unreachable."""
+
     pass
 
 
 class BridgeUnauthorizedError(WhatsAppError):
     """Raised when the Go whatsmeow bridge returns HTTP 401 (Unauthorized)."""
+
     pass
 
 
 class SessionExpiredError(WhatsAppError):
     """Raised when the WhatsApp session is expired or disconnected."""
+
     pass
 
 
 class ChatNotFoundError(WhatsAppError):
     """Raised when a recipient chat/JID is not found or is invalid."""
+
     pass
 
 
 class LocalFileNotFoundError(WhatsAppError):
     """Raised when a local file to be sent is not found on the filesystem."""
+
     pass
 
 
 class SystemDependencyError(WhatsAppError):
     """Raised when a system dependency (like ffmpeg) is missing or fails."""
+
+    pass
+
+
+class InvalidParameterError(WhatsAppError):
+    """Raised when a parameter provided to a tool/function is missing or invalid."""
+
     pass
 
 
@@ -110,7 +123,9 @@ def check_bridge_health() -> None:
     try:
         response = requests.get(url, headers=_bridge_headers(), timeout=5.0)
     except requests.RequestException as e:
-        _last_health_check_error = BridgeUnavailableError(f"bridge_unavailable: The WhatsApp bridge is unreachable. {e}")
+        _last_health_check_error = BridgeUnavailableError(
+            f"bridge_unavailable: The WhatsApp bridge is unreachable. {e}"
+        )
         _last_health_check_time = now
         raise _last_health_check_error
 
@@ -1081,7 +1096,7 @@ def send_message(
     quoted_content: str = "",
 ) -> tuple[bool, str]:
     if not recipient:
-        raise ChatNotFoundError("chat_not_found: Recipient must be provided")
+        raise InvalidParameterError("invalid_parameters: Recipient must be provided")
 
     check_bridge_health()
 
@@ -1112,7 +1127,9 @@ def send_message(
                 raise SessionExpiredError(f"whatsapp_session_expired: {text}")
             raise ChatNotFoundError(f"chat_not_found: {text}")
         elif response.status_code >= 500:
-            raise BridgeUnavailableError(f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}")
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
             raise ChatNotFoundError(f"chat_not_found: Error: HTTP {response.status_code} - {response.text}")
 
@@ -1121,17 +1138,26 @@ def send_message(
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError)):
+        if isinstance(
+            e,
+            (
+                BridgeUnavailableError,
+                BridgeUnauthorizedError,
+                SessionExpiredError,
+                ChatNotFoundError,
+                InvalidParameterError,
+            ),
+        ):
             raise
         raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
 
 
 def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
     if not recipient:
-        raise ChatNotFoundError("chat_not_found: Recipient must be provided")
+        raise InvalidParameterError("invalid_parameters: Recipient must be provided")
 
     if not media_path:
-        raise ChatNotFoundError("chat_not_found: Media path must be provided")
+        raise InvalidParameterError("invalid_parameters: Media path must be provided")
 
     if not os.path.isfile(media_path):
         raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
@@ -1158,7 +1184,9 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
                 raise SessionExpiredError(f"whatsapp_session_expired: {text}")
             raise ChatNotFoundError(f"chat_not_found: {text}")
         elif response.status_code >= 500:
-            raise BridgeUnavailableError(f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}")
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
             raise ChatNotFoundError(f"chat_not_found: Error: HTTP {response.status_code} - {response.text}")
 
@@ -1167,17 +1195,27 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError)):
+        if isinstance(
+            e,
+            (
+                BridgeUnavailableError,
+                BridgeUnauthorizedError,
+                SessionExpiredError,
+                ChatNotFoundError,
+                LocalFileNotFoundError,
+                InvalidParameterError,
+            ),
+        ):
             raise
         raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
 
 
 def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
     if not recipient:
-        raise ChatNotFoundError("chat_not_found: Recipient must be provided")
+        raise InvalidParameterError("invalid_parameters: Recipient must be provided")
 
     if not media_path:
-        raise ChatNotFoundError("chat_not_found: Media path must be provided")
+        raise InvalidParameterError("invalid_parameters: Media path must be provided")
 
     if not os.path.isfile(media_path):
         raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
@@ -1189,8 +1227,7 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
             media_path = converted_temp_path
         except Exception as e:
             raise SystemDependencyError(
-                f"internal_error: Error converting file to opus ogg. "
-                f"You likely need to install ffmpeg: {str(e)}"
+                f"internal_error: Error converting file to opus ogg. You likely need to install ffmpeg: {str(e)}"
             )
 
     try:
@@ -1215,7 +1252,9 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
                 raise SessionExpiredError(f"whatsapp_session_expired: {text}")
             raise ChatNotFoundError(f"chat_not_found: {text}")
         elif response.status_code >= 500:
-            raise BridgeUnavailableError(f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}")
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
             raise ChatNotFoundError(f"chat_not_found: Error: HTTP {response.status_code} - {response.text}")
 
@@ -1224,7 +1263,18 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError, SystemDependencyError)):
+        if isinstance(
+            e,
+            (
+                BridgeUnavailableError,
+                BridgeUnauthorizedError,
+                SessionExpiredError,
+                ChatNotFoundError,
+                LocalFileNotFoundError,
+                SystemDependencyError,
+                InvalidParameterError,
+            ),
+        ):
             raise
         raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
     finally:
@@ -1246,7 +1296,7 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
         The local file path if download was successful, None otherwise
     """
     if not message_id or not chat_jid:
-        raise ChatNotFoundError("chat_not_found: Message ID and Chat JID are required")
+        raise InvalidParameterError("invalid_parameters: Message ID and Chat JID are required")
 
     check_bridge_health()
 
@@ -1263,7 +1313,7 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
                 print(f"Media downloaded successfully: {path}")
                 return path
             else:
-                msg = result.get('message', 'Unknown error')
+                msg = result.get("message", "Unknown error")
                 raise ChatNotFoundError(f"chat_not_found: Download failed: {msg}")
         elif response.status_code == 401:
             raise BridgeUnauthorizedError("bridge_unauthorized: Authentication failed on the bridge.")
@@ -1272,7 +1322,9 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
         elif response.status_code == 400:
             raise ChatNotFoundError(f"chat_not_found: {response.text}")
         elif response.status_code >= 500:
-            raise BridgeUnavailableError(f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}")
+            raise BridgeUnavailableError(
+                f"bridge_unavailable: Server error (HTTP {response.status_code}): {response.text}"
+            )
         else:
             raise ChatNotFoundError(
                 f"chat_not_found: Failed to download media (HTTP {response.status_code}): {response.text}"
@@ -1283,6 +1335,15 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError)):
+        if isinstance(
+            e,
+            (
+                BridgeUnavailableError,
+                BridgeUnauthorizedError,
+                SessionExpiredError,
+                ChatNotFoundError,
+                InvalidParameterError,
+            ),
+        ):
             raise
         raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")

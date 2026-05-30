@@ -15,6 +15,7 @@ from whatsapp import (
     BridgeUnauthorizedError,
     BridgeUnavailableError,
     ChatNotFoundError,
+    InvalidParameterError,
     LocalFileNotFoundError,
     SessionExpiredError,
     SystemDependencyError,
@@ -487,6 +488,9 @@ def handle_mcp_errors(func):
             return {"success": False, "error_code": "file_not_found", "message": str(e)}
         except SystemDependencyError as e:
             return {"success": False, "error_code": "internal_error", "message": str(e)}
+        except InvalidParameterError as e:
+            return {"success": False, "error_code": "invalid_parameters", "message": str(e)}
+
     return wrapper
 
 
@@ -517,7 +521,7 @@ def send_message(
     """
     # Validate input
     if not recipient:
-        return {"success": False, "error_code": "chat_not_found", "message": "Recipient must be provided"}
+        return {"success": False, "error_code": "invalid_parameters", "message": "Recipient must be provided"}
 
     # Call the whatsapp_send_message function with the unified recipient parameter
     success, status_message = whatsapp_send_message(

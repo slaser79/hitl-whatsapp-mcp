@@ -324,3 +324,37 @@ def test_invalid_parameters():
     assert res["success"] is False
     assert res["error_code"] == "invalid_parameters"
     assert "Message ID and Chat JID are required" in res["message"]
+
+
+def test_send_success_false(monkeypatch, tmp_path):
+    """If send functions receive HTTP 200 with success=False, they raise ChatNotFoundError."""
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    def fake_post_success_false(url, json, headers=None):
+        return DummyResponse(status_code=200, payload={"success": False, "message": "Failed to send"})
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_success_false)
+
+    # 1) send_message
+    res = main.send_message(recipient="12025551234", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "chat_not_found"
+    assert "chat_not_found" in res["message"]
+
+    # 2) send_file
+    dummy_file = tmp_path / "dummy.jpg"
+    dummy_file.write_text("content")
+    res = main.send_file(recipient="12025551234", media_path=str(dummy_file))
+    assert res["success"] is False
+    assert res["error_code"] == "chat_not_found"
+    assert "chat_not_found" in res["message"]
+
+    # 3) send_audio_message
+    dummy_audio = tmp_path / "dummy.ogg"
+    dummy_audio.write_text("content")
+    res = main.send_audio_message(recipient="12025551234", media_path=str(dummy_audio))
+    assert res["success"] is False
+    assert res["error_code"] == "chat_not_found"
+    assert "chat_not_found" in res["message"]

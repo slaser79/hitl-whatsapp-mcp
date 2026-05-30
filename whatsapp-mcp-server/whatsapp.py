@@ -1116,7 +1116,11 @@ def send_message(
         # Check if the request was successful
         if response.status_code == 200:
             result = response.json()
-            return result.get("success", False), result.get("message", "Unknown response")
+            if result.get("success", False):
+                return True, result.get("message", "Unknown response")
+            else:
+                msg = result.get("message", "Unknown error")
+                raise ChatNotFoundError(f"chat_not_found: Send failed: {msg}")
         elif response.status_code == 401:
             raise BridgeUnauthorizedError(f"bridge_unauthorized: Error: HTTP {response.status_code} - {response.text}")
         elif response.status_code == 503:
@@ -1164,7 +1168,11 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
         # Check if the request was successful
         if response.status_code == 200:
             result = response.json()
-            return result.get("success", False), result.get("message", "Unknown response")
+            if result.get("success", False):
+                return True, result.get("message", "Unknown response")
+            else:
+                msg = result.get("message", "Unknown error")
+                raise ChatNotFoundError(f"chat_not_found: Send failed: {msg}")
         elif response.status_code == 401:
             raise BridgeUnauthorizedError(f"bridge_unauthorized: Error: HTTP {response.status_code} - {response.text}")
         elif response.status_code == 503:
@@ -1222,7 +1230,11 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
         # Check if the request was successful
         if response.status_code == 200:
             result = response.json()
-            return result.get("success", False), result.get("message", "Unknown response")
+            if result.get("success", False):
+                return True, result.get("message", "Unknown response")
+            else:
+                msg = result.get("message", "Unknown error")
+                raise ChatNotFoundError(f"chat_not_found: Send failed: {msg}")
         elif response.status_code == 401:
             raise BridgeUnauthorizedError(f"bridge_unauthorized: Error: HTTP {response.status_code} - {response.text}")
         elif response.status_code == 503:
@@ -1264,6 +1276,13 @@ def download_media(message_id: str, chat_jid: str) -> str:
 
     Returns:
         The local file path if download was successful
+
+    Raises:
+        InvalidParameterError: If message_id or chat_jid is missing
+        BridgeUnavailableError: If the bridge is down or download fails
+        BridgeUnauthorizedError: If authentication fails
+        SessionExpiredError: If the session has expired
+        ChatNotFoundError: If the chat is not found
     """
     if not message_id or not chat_jid:
         raise InvalidParameterError("invalid_parameters: Message ID and Chat JID are required")

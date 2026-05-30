@@ -519,10 +519,6 @@ def send_message(
     Returns:
         A dictionary containing success status and a status message
     """
-    # Validate input
-    if not recipient:
-        return {"success": False, "error_code": "invalid_parameters", "message": "Recipient must be provided"}
-
     # Call the whatsapp_send_message function with the unified recipient parameter
     success, status_message = whatsapp_send_message(
         recipient, message, quoted_message_id, quoted_sender_jid, quoted_content

@@ -67,9 +67,9 @@ def resolve_transport(value: str | None) -> str:
 
 
 def resolve_port(value: str | None) -> int:
-    """Parse WHATSAPP_MCP_PORT, falling back to FastMCP's default of 8000."""
+    """Parse WHATSAPP_MCP_PORT, falling back to this server's default of 8080."""
     if not value:
-        return 8000
+        return 8080
     try:
         return int(value)
     except ValueError:
@@ -417,19 +417,25 @@ def shutdown_handler(signum, frame):
     sys.exit(0)
 
 
+def run_mcp_server() -> None:
+    """Run the MCP server using environment-driven transport settings."""
+    transport = resolve_transport(os.getenv("WHATSAPP_MCP_TRANSPORT"))
+    if transport == "stdio":
+        mcp.run(transport="stdio")
+        return
+
+    # stdout is reserved for the protocol on stdio; log startup to stderr.
+    print(
+        f"WhatsApp MCP server listening on {mcp.settings.host}:{mcp.settings.port} via {transport}",
+        file=sys.stderr,
+    )
+    mcp.run(transport=transport)
+
+
 if __name__ == "__main__":
     # Register signal handlers for clean shutdown
     signal.signal(signal.SIGINT, shutdown_handler)
     signal.signal(signal.SIGTERM, shutdown_handler)
 
     # Initialize and run the server
-    transport = resolve_transport(os.getenv("WHATSAPP_MCP_TRANSPORT"))
-    if transport == "stdio":
-        mcp.run(transport="stdio")
-    else:
-        # stdout is reserved for the protocol on stdio; log startup to stderr.
-        print(
-            f"WhatsApp MCP server listening on {mcp.settings.host}:{mcp.settings.port} via {transport}",
-            file=sys.stderr,
-        )
-        mcp.run(transport=transport)
+    run_mcp_server()

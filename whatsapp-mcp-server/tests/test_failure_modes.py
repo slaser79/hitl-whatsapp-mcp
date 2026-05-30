@@ -226,3 +226,39 @@ def test_audio_conversion_failure():
         import os
         if os.path.exists(dummy_file):
             os.remove(dummy_file)
+
+
+def test_health_check_200_disconnected(monkeypatch):
+    """If /api/health returns 200 but connected is False, check_bridge_health raises SessionExpiredError."""
+    def fake_get_disconnected_200(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "disconnected", "connected": False})
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_disconnected_200)
+
+    res = main.send_message(recipient="12025551234", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "whatsapp_session_expired"
+    assert "whatsapp_session_expired" in res["message"]
+
+
+def test_download_media_non_json(monkeypatch):
+    """If download_media receives a non-JSON 200 response, it is caught as bridge_unavailable."""
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    class MalformedResponse(DummyResponse):
+        def json(self):
+            import json
+            raise json.JSONDecodeError("Expecting value", "", 0)
+
+    def fake_post_malformed(url, json, headers=None):
+        return MalformedResponse(status_code=200, text="Not a JSON response")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_malformed)
+
+    res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unavailable"
+    assert "bridge_unavailable" in res["message"]
+

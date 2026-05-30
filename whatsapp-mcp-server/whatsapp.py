@@ -104,19 +104,15 @@ def check_bridge_health() -> None:
 
     try:
         data = response.json()
-        if not data.get("connected", False) or data.get("status") == "disconnected":
-            raise SessionExpiredError(
-                "whatsapp_session_expired: The WhatsApp session has expired or is disconnected. "
-                "Please re-run QR login on the host."
-            )
     except Exception:
-        if response.status_code == 503:
-            raise SessionExpiredError(
-                "whatsapp_session_expired: The WhatsApp session has expired or is disconnected. "
-                "Please re-run QR login on the host."
-            )
         raise BridgeUnavailableError(
             f"bridge_unavailable: Invalid health response from bridge (HTTP {response.status_code})"
+        )
+
+    if not data.get("connected", False) or data.get("status") == "disconnected":
+        raise SessionExpiredError(
+            "whatsapp_session_expired: The WhatsApp session has expired or is disconnected. "
+            "Please re-run QR login on the host."
         )
 
 
@@ -1243,3 +1239,7 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
         raise BridgeUnavailableError(f"bridge_unavailable: Request error: {str(e)}")
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
+    except Exception as e:
+        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError)):
+            raise
+        raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")

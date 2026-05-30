@@ -8,3 +8,5 @@
 
 ## Chronological Lessons
 - 2026-05-30: Repo bootstrapped from `verygoodplugins/whatsapp-mcp` per MISSION-2026-389. Remote transport via upstream PR-112; empire value-add = auth + Tailscale gating + setup guides.
+
+- **Lesson:** In this satellite worktree the Bash tool cwd starts inside `whatsapp-mcp-server/`, so the spec's `cd whatsapp-mcp-server && ...` commands fail with "No such file or directory"; run `uv`/`pytest` directly (already in the server dir) or `pwd` first. **Context:** MISSION-2026-389 CRITIC verification.

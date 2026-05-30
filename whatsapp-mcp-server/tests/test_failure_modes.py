@@ -254,3 +254,20 @@ def test_bridge_500_status_code(monkeypatch):
     assert res["error_code"] == "bridge_unavailable"
     assert "bridge_unavailable" in res["message"]
 
+
+def test_download_media_success_false(monkeypatch):
+    """If download_media receives response 200 but success is False, it is caught as bridge_unavailable."""
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    def fake_post_success_false(url, json, headers=None):
+        return DummyResponse(status_code=200, payload={"success": False, "message": "Failed to download media"})
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_success_false)
+
+    res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unavailable"
+    assert "bridge_unavailable" in res["message"]
+

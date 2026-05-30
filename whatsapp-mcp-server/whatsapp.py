@@ -1131,7 +1131,7 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
         raise ChatNotFoundError("chat_not_found: Recipient must be provided")
 
     if not media_path:
-        raise ChatNotFoundError("chat_not_found: Media path must be provided")
+        raise LocalFileNotFoundError("file_not_found: Media path must be provided")
 
     if not os.path.isfile(media_path):
         raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
@@ -1167,7 +1167,7 @@ def send_file(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError)):
+        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError)):
             raise
         raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
 
@@ -1177,7 +1177,7 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
         raise ChatNotFoundError("chat_not_found: Recipient must be provided")
 
     if not media_path:
-        raise ChatNotFoundError("chat_not_found: Media path must be provided")
+        raise LocalFileNotFoundError("file_not_found: Media path must be provided")
 
     if not os.path.isfile(media_path):
         raise LocalFileNotFoundError(f"file_not_found: Media file not found: {media_path}")
@@ -1224,7 +1224,7 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
     except json.JSONDecodeError as e:
         raise BridgeUnavailableError(f"bridge_unavailable: Error parsing response: {str(e)}")
     except Exception as e:
-        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError, LocalFileNotFoundError, SystemDependencyError)):
+        if isinstance(e, (BridgeUnavailableError, BridgeUnauthorizedError, SessionExpiredError, ChatNotFoundError)):
             raise
         raise BridgeUnavailableError(f"bridge_unavailable: Unexpected error: {str(e)}")
     finally:
@@ -1235,7 +1235,7 @@ def send_audio_message(recipient: str, media_path: str) -> tuple[bool, str]:
                 logger.warning("Failed to remove temporary audio file %s: %s", converted_temp_path, e)
 
 
-def download_media(message_id: str, chat_jid: str) -> str | None:
+def download_media(message_id: str, chat_jid: str) -> str:
     """Download media from a message and return the local file path.
 
     Args:
@@ -1243,7 +1243,7 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
         chat_jid: The JID of the chat containing the message
 
     Returns:
-        The local file path if download was successful, None otherwise
+        The local file path if download was successful
     """
     if not message_id or not chat_jid:
         raise ChatNotFoundError("chat_not_found: Message ID and Chat JID are required")
@@ -1264,7 +1264,7 @@ def download_media(message_id: str, chat_jid: str) -> str | None:
                 return path
             else:
                 msg = result.get('message', 'Unknown error')
-                raise ChatNotFoundError(f"chat_not_found: Download failed: {msg}")
+                raise BridgeUnavailableError(f"bridge_unavailable: Download failed: {msg}")
         elif response.status_code == 401:
             raise BridgeUnauthorizedError("bridge_unauthorized: Authentication failed on the bridge.")
         elif response.status_code == 503:

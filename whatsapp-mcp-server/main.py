@@ -574,10 +574,7 @@ def download_media(message_id: str, chat_jid: str) -> dict[str, Any]:
         A dictionary containing success status, a status message, and the file path if successful
     """
     file_path = whatsapp_download_media(message_id, chat_jid)
-    if file_path:
-        return {"success": True, "message": "Media downloaded successfully", "file_path": file_path}
-    else:
-        return {"success": False, "message": "Failed to download media"}
+    return {"success": True, "message": "Media downloaded successfully", "file_path": file_path}
 
 
 def shutdown_handler(signum, frame):

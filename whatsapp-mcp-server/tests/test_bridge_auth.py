@@ -19,6 +19,7 @@ def mock_health_check(monkeypatch):
         if "/health" in url:
             return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
         return DummyResponse(status_code=404, text="Not Found")
+
     monkeypatch.setattr(whatsapp.requests, "get", fake_get)
 
 

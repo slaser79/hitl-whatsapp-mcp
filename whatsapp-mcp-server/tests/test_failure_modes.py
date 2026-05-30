@@ -153,3 +153,76 @@ def test_chat_not_found_on_download(monkeypatch):
     assert res["success"] is False
     assert res["error_code"] == "chat_not_found"
     assert "chat_not_found" in res["message"]
+
+
+def test_local_file_not_found():
+    """If the local media file is missing, send tools return file_not_found."""
+    res = main.send_file(recipient="12025551234", media_path="nonexistent_file.jpg")
+    assert res["success"] is False
+    assert res["error_code"] == "file_not_found"
+    assert "file_not_found" in res["message"]
+
+    res = main.send_audio_message(recipient="12025551234", media_path="nonexistent_file.ogg")
+    assert res["success"] is False
+    assert res["error_code"] == "file_not_found"
+    assert "file_not_found" in res["message"]
+
+
+def test_bridge_unauthorized(monkeypatch):
+    """If the bridge returns HTTP 401, tools return bridge_unauthorized."""
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    def fake_post_unauthorized(url, json, headers=None):
+        return DummyResponse(status_code=401, text="Unauthorized")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_unauthorized)
+
+    res = main.send_message(recipient="12025551234", message="hello")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unauthorized"
+    assert "bridge_unauthorized" in res["message"]
+
+    dummy_file = "dummy_file.ogg"
+    with open(dummy_file, "w") as f:
+        f.write("dummy content")
+
+    try:
+        res = main.send_file(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "bridge_unauthorized"
+        assert "bridge_unauthorized" in res["message"]
+
+        res = main.send_audio_message(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "bridge_unauthorized"
+        assert "bridge_unauthorized" in res["message"]
+    finally:
+        import os
+        if os.path.exists(dummy_file):
+            os.remove(dummy_file)
+
+    res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unauthorized"
+    assert "bridge_unauthorized" in res["message"]
+
+
+def test_audio_conversion_failure():
+    """If ffmpeg conversion fails, send_audio_message returns internal_error."""
+    # We pass a non-ogg file that exists but contains dummy data. Since it's not a valid audio file,
+    # conversion will fail (either because ffmpeg is missing or it fails to parse it).
+    dummy_file = "dummy_invalid_audio.jpg"
+    with open(dummy_file, "w") as f:
+        f.write("not an audio file")
+
+    try:
+        res = main.send_audio_message(recipient="12025551234", media_path=dummy_file)
+        assert res["success"] is False
+        assert res["error_code"] == "internal_error"
+        assert "internal_error" in res["message"]
+    finally:
+        import os
+        if os.path.exists(dummy_file):
+            os.remove(dummy_file)

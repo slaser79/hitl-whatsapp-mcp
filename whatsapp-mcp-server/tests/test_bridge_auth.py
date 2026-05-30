@@ -58,10 +58,10 @@ def test_send_message_without_token_surfaces_bridge_401(monkeypatch, tmp_path):
 
     monkeypatch.setattr(whatsapp.requests, "post", fake_post)
 
-    success, message = whatsapp.send_message("12025551234", "hello")
+    with pytest.raises(whatsapp.BridgeUnauthorizedError) as exc_info:
+        whatsapp.send_message("12025551234", "hello")
 
-    assert success is False
-    assert "HTTP 401" in message
+    assert "HTTP 401" in str(exc_info.value)
     assert calls[0]["headers"] == {}
 
 

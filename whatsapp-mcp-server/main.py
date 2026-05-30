@@ -11,8 +11,11 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from whatsapp import (
+    AudioConversionError,
+    BridgeUnauthorizedError,
     BridgeUnavailableError,
     ChatNotFoundError,
+    LocalFileNotFoundError,
     SessionExpiredError,
 )
 from whatsapp import (
@@ -502,6 +505,8 @@ def send_message(
         return {"success": success, "message": status_message}
     except BridgeUnavailableError as e:
         return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except BridgeUnauthorizedError as e:
+        return {"success": False, "error_code": "bridge_unauthorized", "message": str(e)}
     except SessionExpiredError as e:
         return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
     except ChatNotFoundError as e:
@@ -526,10 +531,14 @@ def send_file(recipient: str, media_path: str) -> dict[str, Any]:
         return {"success": success, "message": status_message}
     except BridgeUnavailableError as e:
         return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except BridgeUnauthorizedError as e:
+        return {"success": False, "error_code": "bridge_unauthorized", "message": str(e)}
     except SessionExpiredError as e:
         return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
     except ChatNotFoundError as e:
         return {"success": False, "error_code": "chat_not_found", "message": str(e)}
+    except LocalFileNotFoundError as e:
+        return {"success": False, "error_code": "file_not_found", "message": str(e)}
 
 
 @mcp.tool()
@@ -549,10 +558,16 @@ def send_audio_message(recipient: str, media_path: str) -> dict[str, Any]:
         return {"success": success, "message": status_message}
     except BridgeUnavailableError as e:
         return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except BridgeUnauthorizedError as e:
+        return {"success": False, "error_code": "bridge_unauthorized", "message": str(e)}
     except SessionExpiredError as e:
         return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
     except ChatNotFoundError as e:
         return {"success": False, "error_code": "chat_not_found", "message": str(e)}
+    except LocalFileNotFoundError as e:
+        return {"success": False, "error_code": "file_not_found", "message": str(e)}
+    except AudioConversionError as e:
+        return {"success": False, "error_code": "internal_error", "message": str(e)}
 
 
 @mcp.tool()
@@ -574,6 +589,8 @@ def download_media(message_id: str, chat_jid: str) -> dict[str, Any]:
             return {"success": False, "message": "Failed to download media"}
     except BridgeUnavailableError as e:
         return {"success": False, "error_code": "bridge_unavailable", "message": str(e)}
+    except BridgeUnauthorizedError as e:
+        return {"success": False, "error_code": "bridge_unauthorized", "message": str(e)}
     except SessionExpiredError as e:
         return {"success": False, "error_code": "whatsapp_session_expired", "message": str(e)}
     except ChatNotFoundError as e:

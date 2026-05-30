@@ -122,13 +122,13 @@ def test_chat_not_found_on_send(monkeypatch, tmp_path):
 
 
 def test_chat_not_found_on_download(monkeypatch):
-    """If message/chat is invalid/unknown on download (400/500), download_media returns chat_not_found."""
+    """If message/chat is invalid/unknown on download (400), download_media returns chat_not_found."""
     def fake_get_ok(url, headers=None, timeout=None):
         return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
 
     def fake_post_download_fail(url, json, headers=None):
         return DummyResponse(
-            status_code=500, payload={"success": False, "message": "Failed to download media: message not found"}
+            status_code=400, payload={"success": False, "message": "Failed to download media: message not found"}
         )
 
     monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
@@ -233,6 +233,23 @@ def test_download_media_non_json(monkeypatch):
     monkeypatch.setattr(whatsapp.requests, "post", fake_post_malformed)
 
     res = main.download_media(message_id="msg-id", chat_jid="12025551234@s.whatsapp.net")
+    assert res["success"] is False
+    assert res["error_code"] == "bridge_unavailable"
+    assert "bridge_unavailable" in res["message"]
+
+
+def test_bridge_500_status_code(monkeypatch):
+    """If the bridge returns HTTP 500, tools return bridge_unavailable instead of chat_not_found."""
+    def fake_get_ok(url, headers=None, timeout=None):
+        return DummyResponse(status_code=200, payload={"status": "ok", "connected": True})
+
+    def fake_post_500(url, json, headers=None):
+        return DummyResponse(status_code=500, text="Internal Server Error")
+
+    monkeypatch.setattr(whatsapp.requests, "get", fake_get_ok)
+    monkeypatch.setattr(whatsapp.requests, "post", fake_post_500)
+
+    res = main.send_message(recipient="12025551234", message="hello")
     assert res["success"] is False
     assert res["error_code"] == "bridge_unavailable"
     assert "bridge_unavailable" in res["message"]

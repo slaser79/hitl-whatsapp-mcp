@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/slaser79/hitl-whatsapp-mcp/compare/v0.2.1...v0.3.0) (2026-06-13)
+
+
+### Features
+
+* add tailscale serve self-hosting flow ([#11](https://github.com/slaser79/hitl-whatsapp-mcp/issues/11)) ([699956f](https://github.com/slaser79/hitl-whatsapp-mcp/commit/699956fe3825708026141c326a285fe6ffced2ed))
+* implement typed failure-mode errors (EC1/EC2/EC5) and local-only DB configuration assertions ([#8](https://github.com/slaser79/hitl-whatsapp-mcp/issues/8)) ([fa2aa84](https://github.com/slaser79/hitl-whatsapp-mcp/commit/fa2aa841faf2f73a26b1db4a527bafedba2b08bb))
+* **mcp:** support remote transport selection ([#4](https://github.com/slaser79/hitl-whatsapp-mcp/issues/4)) ([67b89aa](https://github.com/slaser79/hitl-whatsapp-mcp/commit/67b89aab9abf3b378187195ef70838cccfe1a5b4))
+* persist inbound quoted_message_id and add reply support to /api/send ([#109](https://github.com/slaser79/hitl-whatsapp-mcp/issues/109)) ([f72d352](https://github.com/slaser79/hitl-whatsapp-mcp/commit/f72d35220153dcd8b1fc2dfc645447cf0796271c)), closes [#107](https://github.com/slaser79/hitl-whatsapp-mcp/issues/107)
+* require auth for remote MCP transport ([#6](https://github.com/slaser79/hitl-whatsapp-mcp/issues/6)) ([17c71d6](https://github.com/slaser79/hitl-whatsapp-mcp/commit/17c71d69e22b906bacc064cb10d88910c6470ec2))
+* trust reverse-proxy hosts for remote MCP + add Nix flake ([#16](https://github.com/slaser79/hitl-whatsapp-mcp/issues/16)) ([427098b](https://github.com/slaser79/hitl-whatsapp-mcp/commit/427098b5fc53c4aadf049ff92fefa6c6804e2b38))
+
+
+### Bug Fixes
+
+* **bridge:** handle ProtocolMessage_REVOKE (delete-for-everyone) events ([#99](https://github.com/slaser79/hitl-whatsapp-mcp/issues/99)) ([7f4ec42](https://github.com/slaser79/hitl-whatsapp-mcp/commit/7f4ec42c455d1716e901b6262a9ff7e3af437b6a))
+
+
+### Documentation
+
+* **spec:** SPEC-WAMCP-001 port fix 8080-&gt;8089 (avoid bridge REST conflict) — sync from HQ ([be5a644](https://github.com/slaser79/hitl-whatsapp-mcp/commit/be5a644e0afa938ffcbe7b63546c352cf653f121))
+* sync spec brain/schema.md from HQ ([c09c0a4](https://github.com/slaser79/hitl-whatsapp-mcp/commit/c09c0a4f0170791f43cd92c5bc4c0709a62080dd))
+* sync spec features/SPEC-WAMCP-001_whatsapp_remote_mcp.md from HQ ([86431c6](https://github.com/slaser79/hitl-whatsapp-mcp/commit/86431c667862ed22baa95300eacc4cdf86dcaf30))
+
 ## [0.2.1](https://github.com/verygoodplugins/whatsapp-mcp/compare/v0.2.0...v0.2.1) (2026-05-14)
 
 
